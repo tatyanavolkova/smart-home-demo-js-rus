@@ -1,12 +1,14 @@
-var module_addresses = [
-	"devices/6lowpan/02124B000C467985", // lamp on the first floor 
-	"devices/6lowpan/02124b000c468d07"  // lamp on the second floor
+var network_prefix="devices/6lowpan/"
+
+var module_eui_list = [
+	"02124B000C467985", // lamp on the first floor 	
+	"02124b000c468d07"  // lamp on the second floor
 	]
 
 var client;
 var message;
 
-var BROKER_ADDRESS = "106.109.128.213"; //if connected by wifi, then it will be 192.168.4.254
+var BROKER_ADDRESS = "192.168.4.254"; //if connected by ethernet, then it will be "106.109.128.213" or something like that
 var BROKER_PORT = 1884;
 var CLIENT_ID = "tatyana";
 function start_connection() {
@@ -21,9 +23,15 @@ function start_connection() {
 }
 
 function onConnect() {
-  // Once a connection has been made, make a subscription and send a message.
+  // Once a connection has been made, make a subscription
   console.log("onConnect");
-  client.subscribe(module_address + "/#");
+
+  module_eui_list.forEach(function(module_eui) {
+	subscription_path = network_prefix + module_eui + "/#"
+  	console.log("Subscribing to: " + subscription_path);
+  	client.subscribe(subscription_path);
+  })
+
 };
 
 function onConnectionLost(responseObject) {
@@ -40,6 +48,7 @@ function onMessageArrived(message) {
   } 
   catch (e) {
 	  console.log("Not a valid JSON: " + str);
+	  return;
   }
 
   if(obj.data!==undefined) {
@@ -47,13 +56,16 @@ function onMessageArrived(message) {
 	  var element_id = "null"
 	  if(obj.data.luminocity!==undefined) {
 	  	sensorData=obj.data.luminocity
+		console.log("Luminosity: " + sensorData.toString());
 	  }
+		
 	  if(obj.status.devEUI!==undefined) {
-		if (obj.status.devEUI==module_addresses[0]) //can be refactored
+		module_eui = obj.status.devEUI;
+		console.log("Module EUI: " + module_eui.toString());
+		if (module_eui==module_eui_list[0]) //can be refactored
 			element_id = "luminocity_string_0";
-		else if (obj.status.devEUI==module_addresses[1])
+		else if (module_eui==module_eui_list[1])
 			element_id = "luminocity_string_1";
-
 		if (element_id!="null")			
 			document.getElementById(element_id).innerHTML = sensorData;
 	  }
@@ -61,7 +73,6 @@ function onMessageArrived(message) {
 	  	 
   }
 };
-
 
 function send_message(destination, text) {
 	if(client !== null) {
@@ -74,10 +85,20 @@ function send_message(destination, text) {
 		alert("Client is not connected!");
 }
 
+//module number is 0 or 1
+//level is number from 0 (darkest) to 100 (lightest)
+function set_light_level(module_number, level) {
+	if (module_number<module_eui_list.length) {
+		sending_path = network_prefix + module_eui_list[module_number] + "/mosi/pwm";
+		send_message(sending_path, "set freq 800 dev 01 on ch 01 duty " + level);
+	}	
+}
 
 function ask_luminocity(module_number) {
-	if (module_number<length)
-		send_message(module_addresses[module_number] + "/mosi/opt3001", "get");
+	if (module_number<module_eui_list.length) {
+		sending_path = network_prefix + module_eui_list[module_number] + "/mosi/opt3001";
+		send_message(sending_path, "get");
+	}
 }	
 
 
@@ -90,3 +111,18 @@ function refresh_all() {
 	ask_luminocity(1);
 }
 
+function light_on_0() {
+	set_light_level(0,100);
+}
+
+function light_off_0() {
+	set_light_level(0,0);
+}
+
+function light_on_1() {
+	set_light_level(1,100);
+}
+
+function light_off_1() {
+	set_light_level(1,0);
+}
